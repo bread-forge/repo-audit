@@ -1,3 +1,1 @@
-src/repo_audit/security/__init__.py
-src/repo_audit/security/trivy.py
-src/repo_audit/security/gitleaks.py
+src/repo_audit/security/threat_model.py
