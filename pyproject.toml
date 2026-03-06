@@ -11,11 +11,14 @@ dependencies = []
 [tool.hatch.build.targets.wheel]
 packages = ["src/repo_audit"]
 
-[dependency-groups]
-dev = [
-    "pytest>=7",
-    "ruff>=0.4",
-]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 99
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
