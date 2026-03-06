@@ -1,2 +1,4 @@
-src/repo_audit/cli.py
-src/repo_audit/store/bead_store.py
+tests/test_comparator.py
+tests/test_verdict.py
+tests/test_cli_list.py
+tests/test_delta_mode.py
