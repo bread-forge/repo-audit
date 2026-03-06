@@ -4,7 +4,7 @@ Collect and analyze repository artifacts to surface documentation gaps, dead cod
 
 ## What it does
 
-`repo-audit` reads a local repository directory without executing any of its code. It harvests documentation artifacts (README, CLAUDE.md, specs, docstrings, entry points) and performs static import-graph analysis. A four-layer comparator detects gaps between adjacent representations (declared → structural → behavioral → activated), and the verdict module scores each gap into a `FindingBead` with severity, staleness class, and confidence. Findings are persisted locally under `~/.repo-audit/`. Optionally, an enricher calls the Anthropic API to append extended reasoning and a remediation sketch to each finding.
+`repo-audit` reads a local repository directory without executing any of its code. It harvests documentation artifacts (README, CLAUDE.md, specs, docstrings, entry points) and performs static import-graph analysis. A four-layer comparator detects gaps between adjacent representations (declared → structural → behavioral → activated), and the verdict module scores each gap into a `FindingBead` with severity, staleness class, and confidence. Findings are persisted locally under `~/.repo-audit/`. Optionally, an enricher calls the Anthropic API to append extended reasoning and a remediation sketch to each finding. The `specgen` command then clusters related findings by shared blast-radius modules and writes kiln-format Markdown spec files — skipping clusters already covered by existing specs.
 
 ## Install
 
@@ -51,11 +51,25 @@ repo-audit list /path/to/repo
 
 # List only high-severity findings added after a given cycle
 repo-audit list /path/to/repo --min-severity high --since 20240101T120000Z
+
+# Generate kiln spec files from findings (writes to ./specs/ by default)
+repo-audit specgen /path/to/repo
+
+# Write specs to a custom directory
+repo-audit specgen /path/to/repo --out-dir path/to/specs
+
+# Preview the cluster plan without writing any files
+repo-audit specgen /path/to/repo --dry-run
+
+# Generate specs only for findings added after a given cycle
+repo-audit specgen /path/to/repo --since 20240101T120000Z
 ```
 
 The `run` command writes raw JSON to `~/.repo-audit/cache/<owner>/<repo>/` and persists structured findings to `~/.repo-audit/beads/<owner>/<repo>/` via `RepoAuditStore`. The repo slug is derived from the `origin` git remote; repositories without a remote use `local/<dirname>`.
 
 The `list` command reads from the bead store and prints a table of findings, including any enrichment fields. Pass `--since <cycle-id>` for delta mode — only findings from audit cycles after that ID are shown.
+
+The `specgen` command loads findings from the bead store, groups them into clusters of up to 5 related findings (connected by shared blast-radius modules), skips clusters already covered by existing spec files in the output directory, and writes one `spec-cluster-NNN.md` file per new cluster. Each file contains YAML front-matter (`source_findings`, `blast_radius`, `priority`, `depends_on`) followed by Overview, Goals, Modules, Validation, and Meta sections.
 
 ### Enrichment auto-detection
 
@@ -65,7 +79,7 @@ When neither `--enrich` nor `--no-enrich` is supplied, the `run` command checks 
 
 | File | Description |
 |------|-------------|
-| `src/repo_audit/cli.py` | Typer CLI: `collect`, `analyze`, `run`, and `list` commands |
+| `src/repo_audit/cli.py` | Typer CLI: `collect`, `analyze`, `run`, `list`, and `specgen` commands |
 | `src/repo_audit/collector/harvester.py` | `harvest()` — reads docs, docstrings, and entry points |
 | `src/repo_audit/collector/artifacts.py` | `CollectedArtifacts` dataclass |
 | `src/repo_audit/analyzer/__init__.py` | `analyze()` — entry point for import-graph analysis |
@@ -83,6 +97,10 @@ When neither `--enrich` nor `--no-enrich` is supplied, the `run` command checks 
 | `src/repo_audit/enricher/__init__.py` | Enricher package public exports |
 | `src/repo_audit/enricher/enricher.py` | `Enricher` class — batches unenriched findings, calls the Anthropic Messages API, and patches the store |
 | `src/repo_audit/enricher/prompts.py` | System prompt and `build_user_message()` for LLM enrichment calls |
+| `src/repo_audit/specgen/__init__.py` | SpecGen package public exports |
+| `src/repo_audit/specgen/clusterer.py` | `cluster_findings()` — greedy union-find over module-overlap edges; produces deterministic clusters of ≤5 findings |
+| `src/repo_audit/specgen/formatter.py` | `format_spec()` — renders a cluster to a kiln-format Markdown file with YAML front-matter |
+| `src/repo_audit/specgen/dedup.py` | `load_covered_finding_ids()` and `filter_new_clusters()` — suppresses re-generation of already-covered clusters |
 
 ## Gap layers
 
