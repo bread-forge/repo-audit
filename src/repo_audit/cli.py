@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -14,6 +15,7 @@ import typer
 from repo_audit.analyzer import analyze as _analyze
 from repo_audit.collector import harvest as _harvest
 from repo_audit.comparator import compare as _compare
+from repo_audit.enricher.enricher import DEFAULT_MODEL, Enricher
 from repo_audit.store import RepoAuditStore
 from repo_audit.verdict import verdict as _verdict
 
@@ -110,8 +112,24 @@ def _severity_passes(severity: str, min_severity: str) -> bool:
     return _SEVERITY_RANK.get(severity, 0) >= _SEVERITY_RANK.get(min_severity, 0)
 
 
+def _should_enrich(enrich: Optional[bool]) -> bool:
+    """Determine whether enrichment should run.
+
+    Explicit flags take priority.  When neither ``--enrich`` nor
+    ``--no-enrich`` is supplied, auto-detect by checking whether
+    ``ANTHROPIC_API_KEY`` is present in the environment.
+    """
+    if enrich is not None:
+        return enrich
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
 def _print_findings_table(findings: list) -> None:
-    """Print *findings* as an aligned table to stdout."""
+    """Print *findings* as an aligned table to stdout.
+
+    Extended enrichment fields (``reasoning_extended``, ``remediation_sketch``)
+    are printed as indented lines below each finding when present.
+    """
     header = (
         f"{'ID':<{_COL_ID}}  "
         f"{'SEVERITY':<{_COL_SEVERITY}}  "
@@ -127,6 +145,10 @@ def _print_findings_table(findings: list) -> None:
             f"{f.staleness_class:<{_COL_STALENESS}}  "
             f"{f.summary}"
         )
+        if f.reasoning_extended:
+            typer.echo(f"  Reasoning:    {f.reasoning_extended}")
+        if f.remediation_sketch:
+            typer.echo(f"  Remediation:  {f.remediation_sketch}")
 
 
 @app.command()
@@ -167,6 +189,24 @@ def run(
         False,
         "--print-cycle-id/--no-print-cycle-id",
         help="Print the audit cycle ID to stdout after run.",
+    ),
+    enrich: Optional[bool] = typer.Option(
+        None,
+        "--enrich/--no-enrich",
+        help=(
+            "Enrich findings with LLM-generated reasoning and remediation sketches. "
+            "Defaults to auto-detect: enabled when ANTHROPIC_API_KEY is set."
+        ),
+    ),
+    model: str = typer.Option(
+        DEFAULT_MODEL,
+        "--model",
+        help="Anthropic model ID used for enrichment.",
+    ),
+    re_enrich: bool = typer.Option(
+        False,
+        "--re-enrich/--no-re-enrich",
+        help="Re-enrich findings that have already been enriched in a previous run.",
     ),
 ) -> None:
     """Collect, analyze, compare, and persist findings to the audit store."""
@@ -210,6 +250,23 @@ def run(
 
     if print_cycle_id:
         typer.echo(f"Cycle ID:  {cycle_id}")
+
+    if _should_enrich(enrich):
+        if re_enrich:
+            # Clear existing enrichment so the enricher re-processes all findings.
+            for stored_finding in store.list_findings(slug):
+                if stored_finding.reasoning_extended is not None:
+                    store.patch_finding(
+                        slug,
+                        stored_finding.id,
+                        reasoning_extended=None,
+                        remediation_sketch=None,
+                        enrichment_cost_usd=None,
+                    )
+
+        enricher = Enricher(store=store, model=model)
+        enriched_count = enricher.enrich(slug)
+        typer.echo(f"Enriched:  {enriched_count} findings.")
 
 
 @app.command("list")
