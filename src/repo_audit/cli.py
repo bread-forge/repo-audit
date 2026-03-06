@@ -16,6 +16,10 @@ from repo_audit.analyzer import analyze as _analyze
 from repo_audit.collector import harvest as _harvest
 from repo_audit.comparator import compare as _compare
 from repo_audit.enricher.enricher import DEFAULT_MODEL, Enricher
+from repo_audit.specgen.clusterer import cluster_findings as _cluster_findings
+from repo_audit.specgen.dedup import filter_new_clusters as _filter_new_clusters
+from repo_audit.specgen.dedup import load_covered_finding_ids as _load_covered_ids
+from repo_audit.specgen.formatter import format_spec as _format_spec
 from repo_audit.store import RepoAuditStore
 from repo_audit.verdict import verdict as _verdict
 
@@ -296,3 +300,58 @@ def list_findings(
         return
 
     _print_findings_table(findings)
+
+
+@app.command()
+def specgen(
+    repo_path: Path = typer.Argument(..., help="Path to the repository root."),
+    out_dir: Path = typer.Option(
+        Path("specs"),
+        "--out-dir",
+        help="Directory to write generated spec files into.",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run/--no-dry-run",
+        help="Print the cluster plan without writing any files.",
+    ),
+    since: Optional[str] = typer.Option(
+        None,
+        "--since",
+        help="Load only findings with cycle_id strictly greater than this value.",
+    ),
+) -> None:
+    """Generate kiln spec files from audit findings grouped into clusters."""
+    resolved = _validate_repo_path(repo_path)
+    slug = _derive_repo_slug(resolved)
+
+    store = RepoAuditStore()
+    findings = store.list_findings(slug, since_cycle_id=since)
+
+    if not findings:
+        typer.echo("No findings to generate specs for.")
+        return
+
+    clusters = _cluster_findings(findings)
+
+    if not dry_run:
+        covered_ids = _load_covered_ids(out_dir)
+        clusters = _filter_new_clusters(clusters, covered_ids)
+
+    if not clusters:
+        typer.echo("No new clusters to generate specs for.")
+        return
+
+    if dry_run:
+        typer.echo(f"Cluster plan ({len(clusters)} cluster(s), {len(findings)} finding(s) total):")
+        for i, cluster in enumerate(clusters):
+            ids = ", ".join(f.id for f in cluster)
+            typer.echo(f"  [{i:03d}] {len(cluster)} finding(s): {ids}")
+        return
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for i, cluster in enumerate(clusters):
+        filename, content = _format_spec(cluster, i)
+        (out_dir / filename).write_text(content, encoding="utf-8")
+
+    typer.echo(f"Wrote {len(clusters)} spec file(s) to {out_dir}.")
