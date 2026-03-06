@@ -16,6 +16,9 @@ from repo_audit.analyzer import analyze as _analyze
 from repo_audit.collector import harvest as _harvest
 from repo_audit.comparator import compare as _compare
 from repo_audit.enricher.enricher import DEFAULT_MODEL, Enricher
+from repo_audit.security.gitleaks import GitleaksScanner
+from repo_audit.security.threat_model import ThreatModelAgent
+from repo_audit.security.trivy import TrivyScanner
 from repo_audit.specgen.clusterer import cluster_findings as _cluster_findings
 from repo_audit.specgen.dedup import filter_new_clusters as _filter_new_clusters
 from repo_audit.specgen.dedup import load_covered_finding_ids as _load_covered_ids
@@ -155,6 +158,65 @@ def _print_findings_table(findings: list) -> None:
             typer.echo(f"  Remediation:  {f.remediation_sketch}")
 
 
+def _run_security_scan(
+    repo_path: Path,
+    slug: str,
+    cycle_id: str,
+    store: RepoAuditStore,
+    llm_threat_model: bool,
+) -> int:
+    """Orchestrate TrivyScanner, GitleaksScanner, and optionally ThreatModelAgent.
+
+    Persists all findings to *store* under *slug* and returns the count saved.
+
+    Args:
+        repo_path: Resolved path to the repository root.
+        slug: owner/repo slug used as the store key.
+        cycle_id: Audit-cycle identifier propagated to Trivy and ThreatModelAgent.
+        store: Persists each finding after scanning.
+        llm_threat_model: When True, also run ThreatModelAgent.
+
+    Returns:
+        Total number of security findings persisted.
+    """
+    trivy = TrivyScanner()
+    gitleaks = GitleaksScanner()
+
+    findings = trivy.scan(repo_path, cycle_id=cycle_id)
+    findings += gitleaks.scan(repo_path)
+
+    if llm_threat_model:
+        agent = ThreatModelAgent()
+        findings += agent.scan(repo_path, cycle_id=cycle_id)
+
+    for finding in findings:
+        store.save_finding(slug, finding)
+
+    return len(findings)
+
+
+@app.command("security-scan")
+def security_scan(
+    repo_path: Path = typer.Argument(..., help="Path to the repository root."),
+    llm_threat_model: bool = typer.Option(
+        False,
+        "--llm-threat-model/--no-llm-threat-model",
+        help="Also run LLM-based threat modelling (requires ANTHROPIC_API_KEY).",
+    ),
+) -> None:
+    """Run Trivy CVE scan and Gitleaks secret scan, optionally followed by LLM threat model."""
+    resolved = _validate_repo_path(repo_path)
+    slug = _derive_repo_slug(resolved)
+    cycle_id = _new_cycle_id()
+    store = RepoAuditStore()
+
+    typer.echo(f"Security scanning {slug} ...")
+
+    count = _run_security_scan(resolved, slug, cycle_id, store, llm_threat_model)
+
+    typer.echo(f"Security findings: {count} persisted.")
+
+
 @app.command()
 def collect(
     repo_path: Path = typer.Argument(..., help="Path to the repository root."),
@@ -211,6 +273,16 @@ def run(
         False,
         "--re-enrich/--no-re-enrich",
         help="Re-enrich findings that have already been enriched in a previous run.",
+    ),
+    security: bool = typer.Option(
+        False,
+        "--security/--no-security",
+        help="Run the security scan pipeline (Trivy + Gitleaks) as a final step.",
+    ),
+    llm_threat_model: bool = typer.Option(
+        False,
+        "--llm-threat-model/--no-llm-threat-model",
+        help="When --security is set, also run LLM-based threat modelling.",
     ),
 ) -> None:
     """Collect, analyze, compare, and persist findings to the audit store."""
@@ -271,6 +343,11 @@ def run(
         enricher = Enricher(store=store, model=model)
         enriched_count = enricher.enrich(slug)
         typer.echo(f"Enriched:  {enriched_count} findings.")
+
+    if security:
+        typer.echo("Running security scan ...")
+        sec_count = _run_security_scan(resolved, slug, cycle_id, store, llm_threat_model)
+        typer.echo(f"Security:  {sec_count} findings persisted.")
 
 
 @app.command("list")
