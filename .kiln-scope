@@ -1,1 +1,4 @@
-src/repo_audit/cli.py
+tests/test_trivy_scanner.py
+tests/test_gitleaks_scanner.py
+tests/test_threat_model.py
+tests/test_security_scan_cmd.py
