@@ -1,5 +1,4 @@
-src/repo_audit/analyzer/__init__.py
-src/repo_audit/analyzer/ast_walker.py
-src/repo_audit/analyzer/import_graph.py
-src/repo_audit/analyzer/reachability.py
-src/repo_audit/analyzer/result.py
+src/repo_audit/__init__.py
+src/repo_audit/cli.py
+pyproject.toml
+README.md
