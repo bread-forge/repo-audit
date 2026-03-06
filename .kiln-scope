@@ -1,3 +1,2 @@
-src/repo_audit/enricher/__init__.py
-src/repo_audit/enricher/enricher.py
-src/repo_audit/enricher/prompts.py
+src/repo_audit/cli.py
+pyproject.toml
