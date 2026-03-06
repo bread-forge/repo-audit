@@ -1,0 +1,11 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sample"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[project.scripts]
+sample-run = "sample.__main__:main"

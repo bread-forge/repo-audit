@@ -1,4 +1,13 @@
-src/repo_audit/__init__.py
-src/repo_audit/cli.py
-pyproject.toml
-README.md
+tests/__init__.py
+tests/test_collector.py
+tests/test_ast_walker.py
+tests/test_import_graph.py
+tests/test_reachability.py
+tests/test_store.py
+tests/test_cli.py
+tests/fixtures/sample_repo/README.md
+tests/fixtures/sample_repo/pyproject.toml
+tests/fixtures/sample_repo/src/sample/__init__.py
+tests/fixtures/sample_repo/src/sample/__main__.py
+tests/fixtures/sample_repo/src/sample/core.py
+tests/fixtures/sample_repo/specs/sample_spec.md
