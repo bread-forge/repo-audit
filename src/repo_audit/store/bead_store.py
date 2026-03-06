@@ -147,6 +147,40 @@ class RepoAuditStore:
             results.append(bead)
         return results
 
+    def patch_finding(
+        self,
+        repo_slug: str,
+        finding_id: str,
+        **updates: object,
+    ) -> None:
+        """Apply partial field updates to an existing stored finding.
+
+        Only the fields named in *updates* are changed; all other fields
+        retain their current values.  This is intended for the enricher module
+        to populate ``reasoning_extended``, ``remediation_sketch``, and
+        ``enrichment_cost_usd`` after initial scoring.
+
+        Args:
+            repo_slug: Repository identifier in ``owner/repo`` format.
+            finding_id: The ``id`` of the finding to update.
+            **updates: Keyword arguments mapping field names to new values.
+                Valid keys are any field defined on
+                :class:`~repo_audit.verdict.finding_bead.FindingBead`.
+
+        Raises:
+            ValueError: If *repo_slug* is not in ``owner/repo`` format.
+            ValueError: If no finding with *finding_id* exists in the store.
+        """
+        _validate_slug(repo_slug)
+        path = self._findings_path(repo_slug)
+        envelope = self._load_findings_envelope(path)
+        for item in envelope["findings"]:
+            if item.get("id") == finding_id:
+                item.update(updates)
+                _atomic_write(path, envelope)
+                return
+        raise ValueError(f"Finding {finding_id!r} not found in {repo_slug!r}")
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
