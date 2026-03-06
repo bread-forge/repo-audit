@@ -1,2 +1,3 @@
-src/repo_audit/cli.py
-pyproject.toml
+tests/test_enricher.py
+tests/test_enricher_idempotent.py
+tests/test_cli_enrich_flags.py
