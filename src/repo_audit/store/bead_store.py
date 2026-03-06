@@ -3,6 +3,7 @@
 Layout (mirroring BeadStore's directory convention):
   ~/.repo-audit/beads/<owner>/<repo>/artifacts.json   CollectedArtifacts
   ~/.repo-audit/beads/<owner>/<repo>/analysis.json    AnalysisResult
+  ~/.repo-audit/beads/<owner>/<repo>/findings.json    list of FindingBead
 
 All writes are atomic (write-to-tmp + os.replace) via BeadStore's convention.
 """
@@ -20,16 +21,20 @@ from beads import BeadStore
 if TYPE_CHECKING:
     from repo_audit.analyzer.result import AnalysisResult
     from repo_audit.collector.artifacts import CollectedArtifacts
+    from repo_audit.verdict.finding_bead import FindingBead
 
 DEFAULT_BEADS_DIR = Path.home() / ".repo-audit" / "beads"
 
+# Severity ordering — higher rank means higher severity.
+_SEVERITY_RANK: dict[str, int] = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+
 
 class RepoAuditStore:
-    """Persists collector artifacts and analyzer results via BeadStore.
+    """Persists collector artifacts, analyzer results, and findings via BeadStore.
 
     Each repo_slug gets its own BeadStore instance (and therefore its own
-    directory subtree under beads_dir).  Artifacts and analysis are stored as
-    plain JSON files alongside the BeadStore-managed files.
+    directory subtree under beads_dir).  Artifacts, analysis, and findings are
+    stored as plain JSON files alongside the BeadStore-managed files.
     """
 
     def __init__(self, beads_dir: Path = DEFAULT_BEADS_DIR) -> None:
@@ -88,6 +93,61 @@ class RepoAuditStore:
         return AR(**data)
 
     # ------------------------------------------------------------------
+    # FindingBead
+    # ------------------------------------------------------------------
+
+    def save_finding(self, repo_slug: str, finding: FindingBead) -> None:
+        """Append a FindingBead to findings.json for this repo_slug.
+
+        Findings accumulate across runs; each call appends one entry.
+        """
+        _validate_slug(repo_slug)
+        _init_bead_store(self._beads_dir, repo_slug)
+        path = self._findings_path(repo_slug)
+        stored = self._load_findings_envelope(path)
+        stored["findings"].append(dataclasses.asdict(finding))
+        _atomic_write(path, stored)
+
+    def list_findings(
+        self,
+        repo_slug: str,
+        min_severity: str = "low",
+        since_cycle_id: str | None = None,
+    ) -> list[FindingBead]:
+        """Return FindingBeads for repo_slug, filtered by severity and cycle.
+
+        Args:
+            repo_slug: Repository identifier in ``owner/repo`` format.
+            min_severity: Include only findings at or above this severity level.
+                Must be one of ``"low"``, ``"medium"``, ``"high"``, ``"critical"``.
+            since_cycle_id: When provided, return only findings whose
+                ``cycle_id`` is strictly greater than this value (delta mode).
+                Cycle IDs are UTC timestamp strings that sort lexicographically.
+
+        Returns:
+            Filtered list of :class:`~repo_audit.verdict.finding_bead.FindingBead`
+            instances in the order they were saved.
+        """
+        # Lazy import: verdict module is a separate PR and not present at
+        # store-module build time; it will be importable at runtime.
+        from repo_audit.verdict.finding_bead import FindingBead as FB
+
+        _validate_slug(repo_slug)
+        path = self._findings_path(repo_slug)
+        envelope = self._load_findings_envelope(path)
+
+        min_rank = _SEVERITY_RANK.get(min_severity, 0)
+        results: list[FB] = []
+        for item in envelope["findings"]:
+            bead = FB(**item)
+            if _SEVERITY_RANK.get(bead.severity, 0) < min_rank:
+                continue
+            if since_cycle_id is not None and bead.cycle_id <= since_cycle_id:
+                continue
+            results.append(bead)
+        return results
+
+    # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
@@ -98,6 +158,16 @@ class RepoAuditStore:
     def _analysis_path(self, repo_slug: str) -> Path:
         owner, name = repo_slug.split("/", 1)
         return self._beads_dir / owner / name / "analysis.json"
+
+    def _findings_path(self, repo_slug: str) -> Path:
+        owner, name = repo_slug.split("/", 1)
+        return self._beads_dir / owner / name / "findings.json"
+
+    def _load_findings_envelope(self, path: Path) -> dict:
+        """Return the findings envelope dict, or an empty one if the file is absent."""
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+        return {"findings": []}
 
 
 # ---------------------------------------------------------------------------
