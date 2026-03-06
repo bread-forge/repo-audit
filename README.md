@@ -9,23 +9,19 @@ harvests documentation artifacts (README, CLAUDE.md, specs, docstrings, entry po
 performs static import-graph analysis to identify reachable modules. Results are persisted
 locally under `~/.repo-audit/`.
 
-## Modules
+## Install
 
-| File | Description |
-|------|-------------|
-| `src/repo_audit/cli.py` | Typer CLI: `collect`, `analyze`, and `run` commands |
-| `src/repo_audit/collector/harvester.py` | `harvest()` — reads docs, docstrings, and entry points |
-| `src/repo_audit/collector/artifacts.py` | `CollectedArtifacts` dataclass |
-| `src/repo_audit/analyzer/__init__.py` | `analyze()` — entry point for import-graph analysis |
-| `src/repo_audit/analyzer/ast_walker.py` | Discovers `.py` files |
-| `src/repo_audit/analyzer/import_graph.py` | Builds module → imports mapping via AST |
-| `src/repo_audit/analyzer/reachability.py` | BFS reachability from entry points |
-| `src/repo_audit/analyzer/result.py` | `AnalysisResult` dataclass |
-| `src/repo_audit/store/bead_store.py` | `RepoAuditStore` — atomic JSON persistence |
+Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
+
+```sh
+uv sync
+```
+
+This installs the `repo-audit` CLI and all dependencies into a local virtual environment.
 
 ## Usage
 
-```
+```sh
 # Collect artifacts and print JSON to stdout
 repo-audit collect /path/to/repo
 
@@ -42,6 +38,32 @@ repo-audit run /path/to/repo
 The `run` command writes JSON files to `~/.repo-audit/cache/<owner>/<repo>/` and persists
 structured data to `~/.repo-audit/beads/<owner>/<repo>/` via `RepoAuditStore`. The repo
 slug is derived from the `origin` git remote; repositories without a remote use `local/<dirname>`.
+
+## Modules
+
+| File | Description |
+|------|-------------|
+| `src/repo_audit/cli.py` | Typer CLI: `collect`, `analyze`, and `run` commands |
+| `src/repo_audit/collector/harvester.py` | `harvest()` — reads docs, docstrings, and entry points |
+| `src/repo_audit/collector/artifacts.py` | `CollectedArtifacts` dataclass |
+| `src/repo_audit/analyzer/__init__.py` | `analyze()` — entry point for import-graph analysis |
+| `src/repo_audit/analyzer/ast_walker.py` | Discovers `.py` files and extracts imports via AST |
+| `src/repo_audit/analyzer/import_graph.py` | Builds module → imports mapping |
+| `src/repo_audit/analyzer/reachability.py` | BFS reachability from entry points |
+| `src/repo_audit/analyzer/result.py` | `AnalysisResult` dataclass |
+| `src/repo_audit/store/bead_store.py` | `RepoAuditStore` — atomic JSON persistence via BeadStore |
+
+## Tests
+
+```sh
+uv run pytest
+```
+
+Lint:
+
+```sh
+uv run ruff check
+```
 
 ## Dependencies
 
