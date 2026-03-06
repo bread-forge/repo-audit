@@ -4,7 +4,7 @@ Collect and analyze repository artifacts to surface documentation gaps, dead cod
 
 ## What it does
 
-`repo-audit` reads a local repository directory without executing any of its code. It harvests documentation artifacts (README, CLAUDE.md, specs, docstrings, entry points) and performs static import-graph analysis. A four-layer comparator then detects gaps between adjacent representations (declared → structural → behavioral → activated), and the verdict module scores each gap into a `FindingBead` with severity, staleness class, and confidence. Findings are persisted locally under `~/.repo-audit/`.
+`repo-audit` reads a local repository directory without executing any of its code. It harvests documentation artifacts (README, CLAUDE.md, specs, docstrings, entry points) and performs static import-graph analysis. A four-layer comparator detects gaps between adjacent representations (declared → structural → behavioral → activated), and the verdict module scores each gap into a `FindingBead` with severity, staleness class, and confidence. Findings are persisted locally under `~/.repo-audit/`. Optionally, an enricher calls the Anthropic API to append extended reasoning and a remediation sketch to each finding.
 
 ## Install
 
@@ -34,6 +34,18 @@ repo-audit run /path/to/repo
 # Run and only persist findings at or above a severity threshold
 repo-audit run /path/to/repo --min-severity high
 
+# Run with LLM enrichment explicitly enabled
+repo-audit run /path/to/repo --enrich
+
+# Run with enrichment disabled even when ANTHROPIC_API_KEY is set
+repo-audit run /path/to/repo --no-enrich
+
+# Re-enrich findings that were already enriched in a previous run
+repo-audit run /path/to/repo --re-enrich
+
+# Use a specific Anthropic model for enrichment
+repo-audit run /path/to/repo --model claude-haiku-4-5-20251001
+
 # List persisted findings for a repo
 repo-audit list /path/to/repo
 
@@ -43,7 +55,11 @@ repo-audit list /path/to/repo --min-severity high --since 20240101T120000Z
 
 The `run` command writes raw JSON to `~/.repo-audit/cache/<owner>/<repo>/` and persists structured findings to `~/.repo-audit/beads/<owner>/<repo>/` via `RepoAuditStore`. The repo slug is derived from the `origin` git remote; repositories without a remote use `local/<dirname>`.
 
-The `list` command reads from the bead store and prints a table of findings. Pass `--since <cycle-id>` for delta mode — only findings from audit cycles after that ID are shown.
+The `list` command reads from the bead store and prints a table of findings, including any enrichment fields. Pass `--since <cycle-id>` for delta mode — only findings from audit cycles after that ID are shown.
+
+### Enrichment auto-detection
+
+When neither `--enrich` nor `--no-enrich` is supplied, the `run` command checks for the `ANTHROPIC_API_KEY` environment variable. Enrichment is enabled automatically when the key is present and skipped silently when it is not.
 
 ## Modules
 
@@ -61,9 +77,12 @@ The `list` command reads from the bead store and prints a table of findings. Pas
 | `src/repo_audit/comparator/gap_signal.py` | `GapSignal` dataclass (layer, kind, subject, evidence) |
 | `src/repo_audit/comparator/layers.py` | Four diff functions: declared_vs_structural, structural_vs_behavioral, behavioral_vs_activated, test_vs_declared |
 | `src/repo_audit/verdict/__init__.py` | `verdict()` — converts `GapSignal` list into `FindingBead` list |
-| `src/repo_audit/verdict/finding_bead.py` | `FindingBead` dataclass (id, severity, staleness_class, confidence, reasoning) |
+| `src/repo_audit/verdict/finding_bead.py` | `FindingBead` dataclass — includes enrichment fields `reasoning_extended`, `remediation_sketch`, `enrichment_cost_usd` |
 | `src/repo_audit/verdict/scorer.py` | `score_signal()` — heuristic tables mapping layer/kind to severity and staleness |
-| `src/repo_audit/store/bead_store.py` | `RepoAuditStore` — atomic JSON persistence for artifacts, analysis, and findings |
+| `src/repo_audit/store/bead_store.py` | `RepoAuditStore` — atomic JSON persistence for artifacts, analysis, and findings; `patch_finding()` for in-place enrichment updates |
+| `src/repo_audit/enricher/__init__.py` | Enricher package public exports |
+| `src/repo_audit/enricher/enricher.py` | `Enricher` class — batches unenriched findings, calls the Anthropic Messages API, and patches the store |
+| `src/repo_audit/enricher/prompts.py` | System prompt and `build_user_message()` for LLM enrichment calls |
 
 ## Gap layers
 
@@ -89,4 +108,4 @@ uv run ruff check
 ## Dependencies
 
 - [`typer`](https://typer.tiangolo.com/) — CLI framework
-- [`beads`](https://pypi.org/project/beads/) — bead store persistence (transitive, via `store` module)
+- [`anthropic`](https://pypi.org/project/anthropic/) — Anthropic Python SDK, used by the enricher for LLM-powered finding analysis
