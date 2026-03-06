@@ -1,4 +1,2 @@
-tests/test_comparator.py
-tests/test_verdict.py
-tests/test_cli_list.py
-tests/test_delta_mode.py
+src/repo_audit/verdict/finding_bead.py
+src/repo_audit/store/bead_store.py

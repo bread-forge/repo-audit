@@ -29,6 +29,12 @@ class FindingBead:
         cycle_id: Identifier of the audit cycle that produced this finding.
         repo_path: Filesystem path to the repository that was audited.
         summary: Short one-line description suitable for display in a table.
+        reasoning_extended: Optional long-form LLM-generated explanation of the
+            finding, populated by the enricher module after initial scoring.
+        remediation_sketch: Optional suggested fix or remediation approach,
+            populated by the enricher module after initial scoring.
+        enrichment_cost_usd: Optional cost in USD of the LLM enrichment call
+            that produced ``reasoning_extended`` and ``remediation_sketch``.
     """
 
     id: str
@@ -41,3 +47,6 @@ class FindingBead:
     cycle_id: str = ""
     repo_path: str = ""
     summary: str = ""
+    reasoning_extended: str | None = None
+    remediation_sketch: str | None = None
+    enrichment_cost_usd: float | None = None
