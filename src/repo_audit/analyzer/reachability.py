@@ -90,10 +90,7 @@ def _entry_points_from_main_files(repo_path: Path) -> list[str]:
     For example, ``src/mypackage/__main__.py`` where ``src/`` is a src-layout
     root becomes ``mypackage.__main__``.
     """
-    from repo_audit.analyzer.import_graph import (
-        file_to_module_name,
-        find_package_roots,
-    )
+    from repo_audit.analyzer.import_graph import find_package_roots
 
     package_roots = find_package_roots(repo_path)
 
