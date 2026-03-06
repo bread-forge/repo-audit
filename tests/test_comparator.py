@@ -29,7 +29,7 @@ from repo_audit.comparator.layers import (
     behavioral_vs_activated,
     declared_vs_structural,
     structural_vs_behavioral,
-    test_vs_declared,
+    test_vs_declared as _test_vs_declared,
 )
 
 FIXTURE_REPO = Path(__file__).parent / "fixtures" / "sample_repo"
@@ -293,7 +293,7 @@ class TestTestVsDeclared:
         """With no spec/doc files there are no assertions to check."""
         artifacts = CollectedArtifacts(specs={}, docs={})
         analysis = AnalysisResult(import_graph={})
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert signals == []
 
     def test_spec_without_goals_section_returns_no_signals(self) -> None:
@@ -301,7 +301,7 @@ class TestTestVsDeclared:
         spec_content = "# Overview\n\nThis module does stuff.\n"
         artifacts = CollectedArtifacts(specs={"specs/design.md": spec_content})
         analysis = AnalysisResult(import_graph={})
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert signals == []
 
     def test_goal_with_no_test_modules_returns_signal(self) -> None:
@@ -309,7 +309,7 @@ class TestTestVsDeclared:
         spec_content = "## Goals\n\n- The system should process requests\n"
         artifacts = CollectedArtifacts(specs={"specs/design.md": spec_content})
         analysis = AnalysisResult(import_graph={"pkg.core": []})
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert len(signals) == 1
         sig = signals[0]
         assert sig.layer == LAYER_TEST_VS_DECLARED
@@ -325,7 +325,7 @@ class TestTestVsDeclared:
                 "tests.test_core": ["pkg.core"],
             }
         )
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert signals == []
 
     def test_goal_with_untested_referenced_module_returns_signal(self) -> None:
@@ -338,7 +338,7 @@ class TestTestVsDeclared:
                 "tests.test_other": ["pkg.utils"],
             }
         )
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert len(signals) == 1
         assert signals[0].kind == "untested_goal"
 
@@ -347,7 +347,7 @@ class TestTestVsDeclared:
         spec_content = "## Requirements\n\n- The system must be reliable\n"
         artifacts = CollectedArtifacts(specs={"specs/reqs.md": spec_content})
         analysis = AnalysisResult(import_graph={"pkg.core": []})
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert len(signals) == 1
 
     def test_validation_heading_is_detected(self) -> None:
@@ -355,7 +355,7 @@ class TestTestVsDeclared:
         spec_content = "## Validation\n\n- All data must be validated\n"
         artifacts = CollectedArtifacts(specs={"specs/val.md": spec_content})
         analysis = AnalysisResult(import_graph={})
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert len(signals) == 1
 
     def test_docs_field_is_scanned(self) -> None:
@@ -363,7 +363,7 @@ class TestTestVsDeclared:
         doc_content = "## Goals\n\n- The API should be documented\n"
         artifacts = CollectedArtifacts(specs={}, docs={"docs/api.md": doc_content})
         analysis = AnalysisResult(import_graph={})
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert len(signals) == 1
 
     def test_generic_goal_satisfied_by_any_test_module(self) -> None:
@@ -372,7 +372,7 @@ class TestTestVsDeclared:
         artifacts = CollectedArtifacts(specs={"specs/design.md": spec_content})
         # "test_something" starts with "test", so it qualifies as a test module.
         analysis = AnalysisResult(import_graph={"tests.test_something": ["pkg.core"]})
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert signals == []
 
     def test_multiple_goals_each_evaluated_independently(self) -> None:
@@ -391,7 +391,7 @@ class TestTestVsDeclared:
                 "tests.test_core": ["pkg.core"],
             }
         )
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         # Only the storage goal is uncovered.
         assert len(signals) == 1
         assert "storage" in signals[0].subject
@@ -401,7 +401,7 @@ class TestTestVsDeclared:
         spec_content = "## Goals\n\n- The system should work\n"
         artifacts = CollectedArtifacts(specs={"specs/my_spec.md": spec_content})
         analysis = AnalysisResult(import_graph={})
-        signals = test_vs_declared(artifacts, analysis)
+        signals = _test_vs_declared(artifacts, analysis)
         assert len(signals) == 1
         evidence_text = " ".join(signals[0].evidence)
         assert "specs/my_spec.md" in evidence_text
