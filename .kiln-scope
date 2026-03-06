@@ -1,2 +1,3 @@
-src/repo_audit/verdict/finding_bead.py
-src/repo_audit/store/bead_store.py
+src/repo_audit/enricher/__init__.py
+src/repo_audit/enricher/enricher.py
+src/repo_audit/enricher/prompts.py
