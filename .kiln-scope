@@ -1,4 +1,2 @@
-tests/test_specgen_clusterer.py
-tests/test_specgen_formatter.py
-tests/test_specgen_dedup.py
-tests/test_specgen_cli.py
+src/repo_audit/security/__init__.py
+src/repo_audit/security/trivy.py
