@@ -1,1 +1,1 @@
-src/repo_audit/security/threat_model.py
+src/repo_audit/cli.py
